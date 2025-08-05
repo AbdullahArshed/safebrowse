@@ -1,0 +1,214 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Report Details - SafeBrowse{% endblock %}
+
+{% block content %}
+{% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+{% else %}
+    <!-- Report Header -->
+    <div class="d-flex justify-content-between align-items-start mb-4">
+        <div>
+            <h2>🔍 Security Report</h2>
+            <p class="text-muted mb-0">
+                <a href="{{ report.url }}" target="_blank" rel="noopener">{{ report.url }}</a>
+            </p>
+            <small class="text-muted">
+                Analyzed {{ report.analyzed_at|timesince }} ago 
+                • Took {{ report.analysis_duration|floatformat:1 }} seconds
+            </small>
+        </div>
+        <div class="text-end">
+            <div class="mb-2">
+                <span class="badge safety-badge {{ report.safety_level }} fs-5">
+                    {% if report.safety_level == 'safe' %}✅ SAFE
+                    {% elif report.safety_level == 'warning' %}⚠️ WARNING
+                    {% elif report.safety_level == 'dangerous' %}🔴 DANGEROUS
+                    {% else %}❓ UNKNOWN
+                    {% endif %}
+                </span>
+            </div>
+            <div>
+                <strong class="fs-4">{{ report.safety_score|floatformat:0 }}/100</strong>
+                <small class="text-muted d-block">Safety Score</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">📋 Summary</h5>
+        </div>
+        <div class="card-body">
+            <p>{{ report.summary }}</p>
+            
+            <!-- Quick Stats -->
+            <div class="row mt-3">
+                <div class="col-md-3">
+                    <div class="text-center">
+                        <div class="h4 text-success">{{ report.checks_completed }}</div>
+                        <small class="text-muted">Checks Completed</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center">
+                        <div class="h4 text-danger">{{ report.checks_failed }}</div>
+                        <small class="text-muted">Checks Failed</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center">
+                        <div class="h4 text-info">{{ report.analysis_duration|floatformat:1 }}s</div>
+                        <small class="text-muted">Analysis Time</small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-center">
+                        <div class="h4 text-primary">{{ report.safety_score|floatformat:0 }}/100</div>
+                        <small class="text-muted">Safety Score</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Security Flags -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">🚨 Security Issues Found</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="d-flex align-items-center mb-2">
+                        {% if report.has_malware %}
+                            <span class="badge bg-danger me-2">🦠 MALWARE</span>
+                        {% else %}
+                            <span class="badge bg-success me-2">✅ No Malware</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="d-flex align-items-center mb-2">
+                        {% if report.has_phishing %}
+                            <span class="badge bg-danger me-2">🎣 PHISHING</span>
+                        {% else %}
+                            <span class="badge bg-success me-2">✅ No Phishing</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="d-flex align-items-center mb-2">
+                        {% if report.has_ssl_issues %}
+                            <span class="badge bg-warning me-2">🔒 SSL Issues</span>
+                        {% else %}
+                            <span class="badge bg-success me-2">✅ SSL Secure</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="d-flex align-items-center mb-2">
+                        {% if report.is_blacklisted %}
+                            <span class="badge bg-danger me-2">⚫ Blacklisted</span>
+                        {% else %}
+                            <span class="badge bg-success me-2">✅ Not Blacklisted</span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <div class="d-flex align-items-center mb-2">
+                        {% if report.has_suspicious_domain %}
+                            <span class="badge bg-warning me-2">🔍 Suspicious Domain</span>
+                        {% else %}
+                            <span class="badge bg-success me-2">✅ Domain OK</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="d-flex align-items-center mb-2">
+                        {% if report.has_open_ports %}
+                            <span class="badge bg-warning me-2">🚪 Open Ports</span>
+                        {% else %}
+                            <span class="badge bg-success me-2">✅ Ports Secure</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="d-flex align-items-center mb-2">
+                        {% if report.has_dns_issues %}
+                            <span class="badge bg-warning me-2">📡 DNS Issues</span>
+                        {% else %}
+                            <span class="badge bg-success me-2">✅ DNS OK</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="d-flex align-items-center mb-2">
+                        {% if report.has_mixed_content %}
+                            <span class="badge bg-warning me-2">⚠️ Mixed Content</span>
+                        {% else %}
+                            <span class="badge bg-success me-2">✅ No Mixed Content</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Check Results -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">🔬 Detailed Check Results</h5>
+        </div>
+        <div class="card-body">
+            {% for check in check_results %}
+            <div class="border rounded p-3 mb-3">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <h6 class="mb-1">{{ check.get_check_type_display }}</h6>
+                        <small class="text-muted">
+                            Execution time: {{ check.execution_time|floatformat:2 }}s
+                            • Risk score: {{ check.risk_score|floatformat:0 }}/100
+                            • Weight: {{ check.weight }}
+                        </small>
+                    </div>
+                    <div>
+                        {% if check.status == 'passed' %}
+                            <span class="badge bg-success">✅ Passed</span>
+                        {% elif check.status == 'warning' %}
+                            <span class="badge bg-warning">⚠️ Warning</span>
+                        {% elif check.status == 'failed' %}
+                            <span class="badge bg-danger">❌ Failed</span>
+                        {% else %}
+                            <span class="badge bg-secondary">❓ Error</span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                {% if check.error_message %}
+                    <div class="alert alert-danger mb-2">
+                        <strong>Error:</strong> {{ check.error_message }}
+                    </div>
+                {% endif %}
+                
+                <!-- Show detailed results in a collapsible section -->
+                <div class="mt-2">
+                    <button class="btn btn-outline-secondary btn-sm" type="button" 
+                            data-bs-toggle="collapse" data-bs-target="#details-{{ forloop.counter }}">
+                        Show Details
+                    </button>
+                    
+                    <div class="collapse mt-2" id="details-{{ forloop.counter }}">
+                        <div class="bg-light p-3 rounded">
+                            <pre class="mb-0">{{ check.details|pprint }}</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="mt-4 text-center">
+        <a href="{% url 'reports' %}" class="btn btn-secondary">← Back to Reports</a>
+        <a href="{% url 'chat' %}" class="btn btn-primary">Check Another URL</a>
+    </div>
+{% endif %}
+{% endblock %}

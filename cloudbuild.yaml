@@ -1,0 +1,26 @@
+# Cloud Build configuration for SafeBrowse
+steps:
+# Install dependencies
+- name: 'python:3.9'
+  entrypoint: pip
+  args: ['install', '-r', 'requirements.txt']
+
+# Run tests (optional)
+- name: 'python:3.9'
+  entrypoint: python
+  args: ['manage.py', 'test']
+  env:
+  - 'DJANGO_SETTINGS_MODULE=safebrowse_project.settings'
+
+# Collect static files
+- name: 'python:3.9'
+  entrypoint: python
+  args: ['manage.py', 'collectstatic', '--noinput']
+  env:
+  - 'DJANGO_SETTINGS_MODULE=safebrowse_project.settings'
+
+# Deploy to App Engine
+- name: 'gcr.io/cloud-builders/gcloud'
+  args: ['app', 'deploy', '--quiet']
+
+timeout: '1200s'

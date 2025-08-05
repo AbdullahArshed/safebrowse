@@ -1,0 +1,38 @@
+# Core Django dependencies
+Django>=4.2,<5.0
+djangorestframework>=3.14,<4.0
+django-cors-headers>=4.3,<5.0
+
+# Authentication & Security
+djangorestframework-simplejwt>=5.3,<6.0
+python-decouple>=3.8,<4.0
+
+# API & HTTP clients
+requests>=2.31,<3.0
+httpx>=0.25,<1.0
+
+# URL and Network Analysis
+python-whois>=0.8,<1.0
+dnspython>=2.4,<3.0
+cryptography>=41.0,<42.0
+pyOpenSSL>=23.3,<24.0
+tldextract>=5.1,<6.0
+
+# Google Cloud Platform - Core only
+google-auth>=2.23,<3.0
+google-auth-oauthlib>=1.1,<2.0
+google-api-python-client>=2.108,<3.0
+
+# AI & ML
+openai>=1.3,<2.0
+
+# Utilities
+python-dotenv>=1.0,<2.0
+whitenoise>=6.6,<7.0
+gunicorn>=21.2,<22.0
+
+# Production
+dj-database-url>=2.1,<3.0
+
+# Data Processing
+beautifulsoup4>=4.12,<5.0

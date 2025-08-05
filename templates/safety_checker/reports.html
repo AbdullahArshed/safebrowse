@@ -1,0 +1,256 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Safety Reports - SafeBrowse{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>📊 Your Safety Reports</h2>
+    <div>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#checkUrlModal">
+            🔍 Check New URL
+        </button>
+    </div>
+</div>
+
+<!-- Reports List -->
+<div class="row">
+    <div class="col-12">
+        {% if reports %}
+            {% for report in reports %}
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h6 class="card-title mb-1">
+                                <a href="{{ report.url }}" target="_blank" rel="noopener">{{ report.url }}</a>
+                            </h6>
+                            <p class="card-text text-muted mb-2">{{ report.summary|truncatechars:120 }}</p>
+                            <small class="text-muted">
+                                Analyzed {{ report.analyzed_at|timesince }} ago 
+                                • {{ report.analysis_duration|floatformat:1 }}s
+                                • {{ report.checks_completed }} checks
+                            </small>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <!-- Safety Badge -->
+                            <div class="mb-2">
+                                <span class="badge safety-badge {{ report.safety_level }} fs-6">
+                                    {% if report.safety_level == 'safe' %}✅ SAFE
+                                    {% elif report.safety_level == 'warning' %}⚠️ WARNING
+                                    {% elif report.safety_level == 'dangerous' %}🔴 DANGEROUS
+                                    {% else %}❓ UNKNOWN
+                                    {% endif %}
+                                </span>
+                            </div>
+                            
+                            <!-- Safety Score -->
+                            <div class="mb-2">
+                                <small class="text-muted">Score: </small>
+                                <strong>{{ report.safety_score|floatformat:0 }}/100</strong>
+                            </div>
+                            
+                            <!-- View Details Button -->
+                            <div>
+                                <a href="{% url 'report_detail' report.id %}" class="btn btn-outline-primary btn-sm">
+                                    View Details
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Issues Summary -->
+                    {% if report.has_malware or report.has_phishing or report.has_ssl_issues or report.is_blacklisted %}
+                    <div class="mt-2">
+                        <small class="text-danger">
+                            <strong>Issues found:</strong>
+                            {% if report.has_malware %}Malware, {% endif %}
+                            {% if report.has_phishing %}Phishing, {% endif %}
+                            {% if report.has_ssl_issues %}SSL Issues, {% endif %}
+                            {% if report.has_suspicious_domain %}Suspicious Domain, {% endif %}
+                            {% if report.has_open_ports %}Open Ports, {% endif %}
+                            {% if report.is_blacklisted %}Blacklisted, {% endif %}
+                            {% if report.has_mixed_content %}Mixed Content{% endif %}
+                        </small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="text-center py-5">
+                <h4 class="text-muted">No reports yet</h4>
+                <p class="text-muted">Start by checking your first URL!</p>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#checkUrlModal">
+                    🔍 Check Your First URL
+                </button>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Check URL Modal -->
+<div class="modal fade" id="checkUrlModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">🔍 Check URL Safety</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="urlCheckForm">
+                    <div class="mb-3">
+                        <label for="urlInput" class="form-label">URL to check</label>
+                        <input type="url" class="form-control" id="urlInput" placeholder="https://example.com" required>
+                        <div class="form-text">Enter the complete URL including http:// or https://</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="checkType" class="form-label">Check Type</label>
+                        <select class="form-select" id="checkType">
+                            <option value="quick">Quick Check (faster)</option>
+                            <option value="comprehensive">Comprehensive Check (thorough)</option>
+                        </select>
+                    </div>
+                </form>
+                
+                <div id="checkResult" class="d-none">
+                    <!-- Results will be shown here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="checkUrlBtn">
+                    <span id="checkBtnText">Check URL</span>
+                    <span id="checkBtnLoading" class="d-none">
+                        <span class="spinner-border spinner-border-sm" role="status"></span>
+                        Checking...
+                    </span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    $('#checkUrlBtn').on('click', function() {
+        checkUrl();
+    });
+    
+    $('#urlCheckForm').on('submit', function(e) {
+        e.preventDefault();
+        checkUrl();
+    });
+});
+
+function checkUrl() {
+    const url = $('#urlInput').val().trim();
+    const checkType = $('#checkType').val();
+    
+    if (!url) {
+        alert('Please enter a URL');
+        return;
+    }
+    
+    // Show loading
+    showCheckLoading(true);
+    $('#checkResult').addClass('d-none');
+    
+    $.ajax({
+        url: '{% url "ajax_check_url" %}',
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val() || getCookie('csrftoken')
+        },
+        contentType: 'application/json',
+        data: JSON.stringify({
+            url: url,
+            check_type: checkType
+        }),
+        success: function(response) {
+            if (response.success) {
+                showCheckResult(response);
+                // Refresh page after a delay to show new report
+                setTimeout(function() {
+                    location.reload();
+                }, 3000);
+            } else {
+                showCheckError(response.error || 'Unknown error occurred');
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error('Error checking URL:', error);
+            showCheckError('Failed to check URL. Please try again.');
+        },
+        complete: function() {
+            showCheckLoading(false);
+        }
+    });
+}
+
+function showCheckLoading(show) {
+    const btn = $('#checkUrlBtn');
+    const btnText = $('#checkBtnText');
+    const btnLoading = $('#checkBtnLoading');
+    
+    if (show) {
+        btnText.addClass('d-none');
+        btnLoading.removeClass('d-none');
+        btn.prop('disabled', true);
+    } else {
+        btnText.removeClass('d-none');
+        btnLoading.addClass('d-none');
+        btn.prop('disabled', false);
+    }
+}
+
+function showCheckResult(result) {
+    const resultDiv = $('#checkResult');
+    
+    const safetyBadgeClass = `safety-badge ${result.safety_level}`;
+    let safetyText = result.safety_level.toUpperCase();
+    
+    const html = `
+        <div class="alert alert-info">
+            <h6><span class="badge ${safetyBadgeClass}">${safetyText}</span> Analysis Complete</h6>
+            <p><strong>URL:</strong> <a href="${result.url}" target="_blank">${result.url}</a></p>
+            <p><strong>Safety Score:</strong> ${Math.round(result.safety_score)}/100</p>
+            <p><strong>Summary:</strong> ${result.summary}</p>
+            <small class="text-muted">Analysis took ${result.analysis_duration.toFixed(1)} seconds</small>
+        </div>
+    `;
+    
+    resultDiv.html(html).removeClass('d-none');
+}
+
+function showCheckError(error) {
+    const resultDiv = $('#checkResult');
+    
+    const html = `
+        <div class="alert alert-danger">
+            <h6>❌ Check Failed</h6>
+            <p>${error}</p>
+        </div>
+    `;
+    
+    resultDiv.html(html).removeClass('d-none');
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+{% endblock %}

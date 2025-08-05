@@ -1,0 +1,228 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Chat - SafeBrowse{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">🤖 SafeBrowse Assistant</h5>
+                <small class="text-muted">Send me a URL to check for security threats!</small>
+            </div>
+            
+            <div class="card-body p-0">
+                <!-- Chat Messages Container -->
+                <div id="chat-container" class="chat-container">
+                    <div class="message bot">
+                        <strong>SafeBrowse Bot:</strong> Hello! I'm here to help you check URLs for safety. 
+                        Just send me any website URL and I'll analyze it for malware, phishing, SSL issues, and more!
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card-footer">
+                <!-- Message Input Form -->
+                <form id="message-form" class="d-flex">
+                    <input type="text" id="message-input" class="form-control me-2" 
+                           placeholder="Enter a URL or ask me something..." required>
+                    <button type="submit" class="btn btn-primary" id="send-btn">
+                        <span id="send-text">Send</span>
+                        <span id="loading-text" class="d-none">
+                            <span class="spinner-border spinner-border-sm" role="status"></span>
+                            Checking...
+                        </span>
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Quick Actions -->
+        <div class="mt-3">
+            <small class="text-muted">Quick examples:</small>
+            <div class="mt-1">
+                <button class="btn btn-outline-secondary btn-sm me-2" onclick="sendExample('https://google.com')">
+                    Check Google.com
+                </button>
+                <button class="btn btn-outline-secondary btn-sm me-2" onclick="sendExample('help')">
+                    Help
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="clearChat()">
+                    Clear Chat
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentSessionId = null;
+
+$(document).ready(function() {
+    // Focus on input
+    $('#message-input').focus();
+    
+    // Handle form submission
+    $('#message-form').on('submit', function(e) {
+        e.preventDefault();
+        sendMessage();
+    });
+    
+    // Auto-resize chat container
+    resizeChatContainer();
+    $(window).on('resize', resizeChatContainer);
+});
+
+function resizeChatContainer() {
+    const container = $('#chat-container');
+    const windowHeight = $(window).height();
+    const headerHeight = $('.navbar').outerHeight() || 0;
+    const cardHeaderHeight = $('.card-header').outerHeight() || 0;
+    const cardFooterHeight = $('.card-footer').outerHeight() || 0;
+    const margin = 200; // Extra margin for other elements
+    
+    const maxHeight = windowHeight - headerHeight - cardHeaderHeight - cardFooterHeight - margin;
+    container.css('max-height', Math.max(300, maxHeight) + 'px');
+}
+
+function sendMessage() {
+    const messageInput = $('#message-input');
+    const message = messageInput.val().trim();
+    
+    if (!message) return;
+    
+    // Show user message
+    addMessage('user', message);
+    
+    // Clear input and show loading
+    messageInput.val('');
+    showLoading(true);
+    
+    // Send to backend
+    $.ajax({
+        url: '{% url "ajax_send_message" %}',
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val() || getCookie('csrftoken')
+        },
+        contentType: 'application/json',
+        data: JSON.stringify({
+            message: message,
+            session_id: currentSessionId
+        }),
+        success: function(response) {
+            if (response.success) {
+                currentSessionId = response.session_id;
+                addMessage('bot', response.bot_response.content, response.bot_response.metadata);
+            } else {
+                addMessage('bot', 'Sorry, I encountered an error processing your message.', {error: true});
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error('Error sending message:', error);
+            addMessage('bot', 'Sorry, I\'m having trouble right now. Please try again.', {error: true});
+        },
+        complete: function() {
+            showLoading(false);
+            $('#message-input').focus();
+        }
+    });
+}
+
+function addMessage(type, content, metadata = {}) {
+    const chatContainer = $('#chat-container');
+    const messageDiv = $('<div>').addClass('message').addClass(type);
+    
+    let messageContent = '';
+    
+    if (type === 'user') {
+        messageContent = `<strong>You:</strong> ${escapeHtml(content)}`;
+    } else {
+        messageContent = `<strong>SafeBrowse Bot:</strong> ${formatBotMessage(content, metadata)}`;
+    }
+    
+    messageDiv.html(messageContent);
+    chatContainer.append(messageDiv);
+    
+    // Scroll to bottom
+    chatContainer.scrollTop(chatContainer[0].scrollHeight);
+}
+
+function formatBotMessage(content, metadata) {
+    let formatted = escapeHtml(content).replace(/\n/g, '<br>');
+    
+    // Add safety badges if this is a URL check result
+    if (metadata && metadata.safety_level) {
+        const badgeClass = `safety-badge ${metadata.safety_level}`;
+        const badgeText = metadata.safety_level.toUpperCase();
+        formatted = `<span class="badge ${badgeClass} me-2">${badgeText}</span>` + formatted;
+    }
+    
+    // Format URLs as links
+    formatted = formatted.replace(
+        /(https?:\/\/[^\s<]+)/g, 
+        '<a href="$1" target="_blank" rel="noopener">$1</a>'
+    );
+    
+    return formatted;
+}
+
+function showLoading(show) {
+    const sendBtn = $('#send-btn');
+    const sendText = $('#send-text');
+    const loadingText = $('#loading-text');
+    const messageInput = $('#message-input');
+    
+    if (show) {
+        sendText.addClass('d-none');
+        loadingText.removeClass('d-none');
+        sendBtn.prop('disabled', true);
+        messageInput.prop('disabled', true);
+    } else {
+        sendText.removeClass('d-none');
+        loadingText.addClass('d-none');
+        sendBtn.prop('disabled', false);
+        messageInput.prop('disabled', false);
+    }
+}
+
+function sendExample(message) {
+    $('#message-input').val(message);
+    sendMessage();
+}
+
+function clearChat() {
+    if (confirm('Are you sure you want to clear the chat?')) {
+        $('#chat-container').html(
+            '<div class="message bot">' +
+            '<strong>SafeBrowse Bot:</strong> Chat cleared! Send me a URL to check for safety.' +
+            '</div>'
+        );
+        currentSessionId = null;
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+{% endblock %}
