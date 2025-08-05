@@ -12,7 +12,7 @@ class DNSChecker:
     
     def __init__(self):
         self.resolver = dns.resolver.Resolver()
-        self.resolver.timeout = 10
+        self.resolver.timeout = 3  # Reduced from 10s to 3s
         self.resolver.lifetime = 30
         
     def check_dns_records(self, domain: str) -> Dict[str, Any]:
@@ -325,7 +325,7 @@ class DNSChecker:
             for dns_server in dns_servers:
                 resolver = dns.resolver.Resolver()
                 resolver.nameservers = [dns_server]
-                resolver.timeout = 5
+                resolver.timeout = 2  # Reduced from 5s to 2s
                 
                 try:
                     answers = resolver.resolve(domain, 'A')

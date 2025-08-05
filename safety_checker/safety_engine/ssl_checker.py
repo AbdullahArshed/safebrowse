@@ -110,8 +110,8 @@ class SSLChecker:
                         'issuer': {attr.oid._name: attr.value for attr in cert.issuer},
                         'version': cert.version.name,
                         'serial_number': str(cert.serial_number),
-                        'not_valid_before': cert.not_valid_before,
-                        'not_valid_after': cert.not_valid_after,
+                        'not_valid_before': cert.not_valid_before.isoformat(),
+                        'not_valid_after': cert.not_valid_after.isoformat(),
                         'signature_algorithm': cert.signature_algorithm_oid._name,
                         'public_key_size': cert.public_key().key_size,
                         'subject_alternative_names': self._get_san_list(cert),
@@ -175,9 +175,17 @@ class SSLChecker:
             now = datetime.now(timezone.utc)
             
             # Check expiration
-            not_after = cert_info.get('not_valid_after')
-            if not_after and isinstance(not_after, datetime):
-                validation['certificate_expired'] = not_after < now
+            not_after_str = cert_info.get('not_valid_after')
+            if not_after_str:
+                try:
+                    # Parse ISO string and make timezone-aware
+                    not_after = datetime.fromisoformat(not_after_str.replace('Z', '+00:00'))
+                    if not_after.tzinfo is None:
+                        not_after = not_after.replace(tzinfo=timezone.utc)
+                    validation['certificate_expired'] = not_after < now
+                except (ValueError, AttributeError) as e:
+                    logger.warning(f"Failed to parse certificate expiration date: {e}")
+                    validation['certificate_expired'] = False
             
             # Check if certificate is valid for the domain
             subject_cn = cert_info.get('subject', {}).get('2.5.4.3')  # Common Name

@@ -114,23 +114,31 @@ class WHOISChecker:
                     
                     if date_value:
                         if isinstance(date_value, datetime):
-                            parsed[date_field] = date_value
+                            # Convert datetime to ISO string for JSON serialization
+                            if date_value.tzinfo is None:
+                                date_value = date_value.replace(tzinfo=timezone.utc)
+                            parsed[date_field] = date_value.isoformat()
                         elif isinstance(date_value, str):
-                            # Try to parse string dates
+                            # Try to parse string dates and convert to ISO
                             try:
-                                parsed[date_field] = datetime.fromisoformat(date_value.replace('Z', '+00:00'))
+                                dt = datetime.fromisoformat(date_value.replace('Z', '+00:00'))
+                                parsed[date_field] = dt.isoformat()
                             except ValueError:
                                 pass
             
             # Calculate domain age
             if parsed['creation_date']:
                 now = datetime.now(timezone.utc)
-                creation_date = parsed['creation_date']
-                if creation_date.tzinfo is None:
-                    creation_date = creation_date.replace(tzinfo=timezone.utc)
-                
-                age_delta = now - creation_date
-                parsed['domain_age_days'] = age_delta.days
+                try:
+                    # Parse the ISO string back to datetime for age calculation
+                    creation_date = datetime.fromisoformat(parsed['creation_date'])
+                    if creation_date.tzinfo is None:
+                        creation_date = creation_date.replace(tzinfo=timezone.utc)
+                    
+                    age_delta = now - creation_date
+                    parsed['domain_age_days'] = age_delta.days
+                except (ValueError, TypeError):
+                    parsed['domain_age_days'] = 0
             
             # Name servers
             if hasattr(whois_info, 'name_servers') and whois_info.name_servers:
