@@ -1,4 +1,3 @@
-import openai
 import logging
 from typing import Dict, Any, List, Optional
 from django.conf import settings
@@ -7,6 +6,14 @@ from django.utils import timezone
 import re
 import json
 
+# Optional OpenAI import
+try:
+    import openai
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+    openai = None
+
 from .models import ChatSession, ChatMessage, BotIntent, ConversationContext
 from safety_checker.safety_engine.main_checker import MainSafetyChecker
 
@@ -14,14 +21,27 @@ logger = logging.getLogger(__name__)
 
 class ChatbotService:
     """
-    Main chatbot service using OpenAI API for natural language processing
+    Main chatbot service with optional OpenAI API for enhanced natural language processing
+    Works perfectly without OpenAI using predefined responses and pattern matching
     """
     
     def __init__(self):
-        openai.api_key = settings.OPENAI_API_KEY
+        self.openai_enabled = False
         self.safety_checker = MainSafetyChecker()
         self.max_tokens = 150
         self.temperature = 0.7
+        
+        # Check if OpenAI is available and configured
+        if OPENAI_AVAILABLE and hasattr(settings, 'OPENAI_API_KEY') and settings.OPENAI_API_KEY:
+            try:
+                openai.api_key = settings.OPENAI_API_KEY
+                self.openai_enabled = True
+                logger.info("OpenAI API enabled for enhanced chatbot responses")
+            except Exception as e:
+                logger.warning(f"Failed to configure OpenAI: {e}")
+                self.openai_enabled = False
+        else:
+            logger.info("OpenAI not available - using built-in pattern matching and responses")
         
         # Initialize intents
         self._initialize_intents()
@@ -188,17 +208,16 @@ class ChatbotService:
                         'intent_obj': intent
                     }
         
-        # Use OpenAI for intent detection if no pattern match
-        try:
-            intent_result = self._detect_intent_with_openai(message)
-            return intent_result
-        except Exception as e:
-            logger.error(f"OpenAI intent detection failed: {e}")
-            return {
-                'intent': 'unknown',
-                'confidence': 0.0,
-                'intent_obj': None
-            }
+        # Use OpenAI for intent detection if available and no pattern match
+        if self.openai_enabled:
+            try:
+                intent_result = self._detect_intent_with_openai(message)
+                return intent_result
+            except Exception as e:
+                logger.error(f"OpenAI intent detection failed: {e}")
+        
+        # Fallback to simple keyword-based detection
+        return self._detect_intent_fallback(message)
     
     def _detect_intent_with_openai(self, message: str) -> Dict[str, Any]:
         """Use OpenAI to detect intent"""
@@ -239,6 +258,42 @@ class ChatbotService:
         except Exception as e:
             logger.error(f"OpenAI intent detection error: {e}")
             raise
+    
+    def _detect_intent_fallback(self, message: str) -> Dict[str, Any]:
+        """Fallback intent detection using keyword analysis"""
+        message_lower = message.lower()
+        
+        # Enhanced keyword patterns for better intent detection
+        intent_keywords = {
+            'greeting': ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening', 'howdy', 'greetings'],
+            'url_check_request': ['check', 'analyze', 'scan', 'test', 'verify', 'examine', 'look at', 'http', 'https', 'www', '.com', '.org', '.net'],
+            'help': ['help', 'what can you do', 'commands', 'how', 'usage', 'guide', 'tutorial', 'instructions'],
+            'thanks': ['thank', 'thanks', 'appreciate', 'grateful', 'great job', 'good job', 'awesome', 'perfect'],
+            'question': ['what', 'why', 'how', 'when', 'where', 'is', 'are', 'can', 'will', 'would', 'could', '?']
+        }
+        
+        # Score each intent based on keyword matches
+        intent_scores = {}
+        for intent, keywords in intent_keywords.items():
+            score = sum(1 for keyword in keywords if keyword in message_lower)
+            if score > 0:
+                intent_scores[intent] = score
+        
+        if intent_scores:
+            # Return the intent with the highest score
+            best_intent = max(intent_scores, key=intent_scores.get)
+            confidence = min(intent_scores[best_intent] * 0.2, 0.9)  # Max confidence 0.9
+            return {
+                'intent': best_intent,
+                'confidence': confidence,
+                'intent_obj': None
+            }
+        
+        return {
+            'intent': 'unknown',
+            'confidence': 0.0,
+            'intent_obj': None
+        }
     
     def _extract_urls(self, message: str) -> List[str]:
         """Extract URLs from message"""
@@ -363,20 +418,62 @@ class ChatbotService:
             import random
             response_text = random.choice(intent_obj.responses)
         else:
-            # Use OpenAI for dynamic response
-            try:
-                response_text = self._generate_openai_response(session, message, intent)
-            except Exception as e:
-                logger.error(f"OpenAI response generation failed: {e}")
-                response_text = "I understand you're trying to communicate with me. I'm here to help you check URLs for safety. Just share a URL and I'll analyze it for you!"
+            # Use OpenAI for dynamic response if available
+            if self.openai_enabled:
+                try:
+                    response_text = self._generate_openai_response(session, message, intent)
+                except Exception as e:
+                    logger.error(f"OpenAI response generation failed: {e}")
+                    response_text = self._generate_fallback_response(intent, message)
+            else:
+                # Use fallback response generation
+                response_text = self._generate_fallback_response(intent, message)
         
         return {
             'content': response_text,
             'metadata': {
                 'intent': intent,
-                'generated_by': 'pattern' if intent_obj else 'openai'
+                'generated_by': 'pattern' if intent_obj else ('openai' if self.openai_enabled else 'fallback')
             }
         }
+    
+    def _generate_fallback_response(self, intent: str, message: str) -> str:
+        """Generate fallback responses when OpenAI is not available"""
+        fallback_responses = {
+            'greeting': [
+                "Hello! I'm SafeBrowse Bot, your URL security assistant. I can help you check if websites are safe to visit.",
+                "Hi there! I'm here to help you check URLs for security threats. Just share a link with me!",
+                "Hey! I can analyze websites for malware, phishing, and other security issues. What URL would you like me to check?"
+            ],
+            'url_check_request': [
+                "I'd be happy to check that URL for you! Please share the website address and I'll analyze it.",
+                "Sure! I can scan URLs for security threats. Just send me the link you want me to check.",
+                "I'll analyze any URL for safety. Please provide the website address you'd like me to examine."
+            ],
+            'help': [
+                "I'm SafeBrowse Bot! Here's what I can do:\n\n🔍 Analyze URLs for security threats\n🛡️ Check for malware and phishing\n🔒 Verify SSL certificates\n🌐 Examine domain reputation\n📊 Provide safety scores\n\nJust send me any URL and I'll give you a comprehensive security analysis!",
+                "I specialize in URL security analysis! I can:\n• Detect malware and phishing sites\n• Check SSL/TLS security\n• Analyze domain reputation\n• Scan for vulnerabilities\n• Provide safety recommendations\n\nSend me a URL to get started!"
+            ],
+            'thanks': [
+                "You're welcome! I'm always here to help keep you safe online. Feel free to check more URLs anytime!",
+                "Happy to help! Stay safe out there and don't hesitate to check any suspicious links with me.",
+                "Glad I could assist! Remember, when in doubt about a website's safety, just ask me to check it."
+            ],
+            'question': [
+                "That's a great question! I focus on URL security analysis. If you have a specific website you'd like me to check, just share the URL!",
+                "I'm specialized in analyzing website security. If you're wondering about a particular site's safety, send me the URL and I'll investigate!",
+                "I can help answer questions about website security! If you have a specific URL you're concerned about, I'd be happy to analyze it."
+            ],
+            'unknown': [
+                "I understand you're trying to communicate with me. I'm SafeBrowse Bot, and I specialize in checking URLs for security threats. Just share a website address and I'll analyze it for you!",
+                "I'm here to help you check website safety! If you have a URL you'd like me to analyze for security issues, please share it with me.",
+                "I focus on URL security analysis. Send me any website address and I'll check it for malware, phishing, and other threats!"
+            ]
+        }
+        
+        import random
+        responses = fallback_responses.get(intent, fallback_responses['unknown'])
+        return random.choice(responses)
     
     def _generate_openai_response(self, session: ChatSession, message: str, intent: str) -> str:
         """Generate response using OpenAI"""

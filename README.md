@@ -166,13 +166,23 @@ python manage.py runserver
 # 🎉 Open http://localhost:8000 and start scanning!
 ```
 
-### 🔑 **Required API Keys**
+### 🔑 **API Keys Configuration**
 
 | **Service** | **Required** | **Get API Key** | **Purpose** |
 |-------------|--------------|-----------------|-------------|
-| 🤖 **OpenAI** | ✅ **YES** | [Get Key](https://platform.openai.com/) | AI chatbot responses |
+| 🤖 **OpenAI** | 🌟 **OPTIONAL** | [Get Key](https://platform.openai.com/) | Enhanced AI chatbot responses |
 | 🛡️ **Google Safe Browsing** | 🌟 Recommended | [Get Key](https://developers.google.com/safe-browsing/) | Malware detection |
 | ☁️ **Google Cloud** | 🚀 For production | [Get Credentials](https://cloud.google.com/) | GCP deployment |
+
+### 💡 **No API Keys? No Problem!**
+
+**SafeBrowse works perfectly without ANY API keys!** 
+
+- 🤖 **Without OpenAI**: Uses intelligent pattern matching + predefined responses
+- 🛡️ **Without Safe Browsing**: Uses domain reputation analysis + blacklist checking  
+- ☁️ **Without GCP**: Runs locally with SQLite database
+
+**All core security analysis features work regardless of API key availability!**
 
 ---
 
@@ -248,10 +258,12 @@ python -c "import django; print(f'Django {django.get_version()} installed')"
 <summary><b>🔐 Environment Variables (.env)</b></summary>
 
 ```bash
-# Required - OpenAI API
-OPENAI_API_KEY=sk-proj-your-openai-key-here
+# OPTIONAL - OpenAI API (for enhanced chatbot responses)
+# Leave commented out to use built-in pattern matching
+# OPENAI_API_KEY=sk-proj-your-openai-key-here
 
-# Recommended - Google Safe Browsing
+# OPTIONAL - Google Safe Browsing (for malware detection)  
+# Leave empty to use built-in domain analysis
 GOOGLE_SAFE_BROWSING_API_KEY=your-safe-browsing-api-key
 GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
@@ -264,7 +276,7 @@ ALLOWED_HOSTS=localhost,127.0.0.1,*.run.app
 # Database (SQLite for development)
 DATABASE_URL=sqlite:///db.sqlite3
 
-# Optional - GCP Deployment
+# OPTIONAL - GCP Deployment
 GOOGLE_CLOUD_PROJECT=your-project-id
 GCP_STORAGE_BUCKET_NAME=your-bucket-name
 ```
